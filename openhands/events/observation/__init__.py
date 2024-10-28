@@ -8,7 +8,6 @@ from openhands.events.observation.delegate import AgentDelegateObservation
 from openhands.events.observation.empty import NullObservation
 from openhands.events.observation.error import ErrorObservation, FatalErrorObservation
 from openhands.events.observation.files import (
-    FileEditObservation,
     FileReadObservation,
     FileWriteObservation,
 )
@@ -24,7 +23,6 @@ __all__ = [
     'BrowserOutputObservation',
     'FileReadObservation',
     'FileWriteObservation',
-    'FileEditObservation',
     'ErrorObservation',
     'FatalErrorObservation',
     'AgentStateChangedObservation',

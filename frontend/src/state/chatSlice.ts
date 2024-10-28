@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-type SliceState = { messages: (Message | ErrorMessage)[] };
+type SliceState = { messages: Message[] };
 
 const initialState: SliceState = {
   messages: [],
@@ -37,24 +37,12 @@ export const chatSlice = createSlice({
       state.messages.push(message);
     },
 
-    addErrorMessage(
-      state,
-      action: PayloadAction<{ error: string; message: string }>,
-    ) {
-      const { error, message } = action.payload;
-      state.messages.push({ error, message });
-    },
-
     clearMessages(state) {
       state.messages = [];
     },
   },
 });
 
-export const {
-  addUserMessage,
-  addAssistantMessage,
-  addErrorMessage,
-  clearMessages,
-} = chatSlice.actions;
+export const { addUserMessage, addAssistantMessage, clearMessages } =
+  chatSlice.actions;
 export default chatSlice.reducer;

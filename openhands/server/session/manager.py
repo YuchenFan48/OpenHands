@@ -1,6 +1,5 @@
 import asyncio
 import time
-from dataclasses import dataclass, field
 from typing import Optional
 
 from fastapi import WebSocket
@@ -14,14 +13,15 @@ from openhands.server.session.session import Session
 from openhands.storage.files import FileStore
 
 
-@dataclass
 class SessionManager:
-    config: AppConfig
-    file_store: FileStore
+    _sessions: dict[str, Session] = {}
     cleanup_interval: int = 300
     session_timeout: int = 600
-    _sessions: dict[str, Session] = field(default_factory=dict)
     _session_cleanup_task: Optional[asyncio.Task] = None
+
+    def __init__(self, config: AppConfig, file_store: FileStore):
+        self.config = config
+        self.file_store = file_store
 
     async def __aenter__(self):
         if not self._session_cleanup_task:
@@ -46,15 +46,10 @@ class SessionManager:
             return None
         return self._sessions.get(sid)
 
-    async def attach_to_conversation(self, sid: str) -> Conversation | None:
+    def attach_to_conversation(self, sid: str) -> Conversation | None:
         if not session_exists(sid, self.file_store):
             return None
-        c = Conversation(sid, file_store=self.file_store, config=self.config)
-        await c.connect()
-        return c
-
-    async def detach_from_conversation(self, conversation: Conversation):
-        await conversation.disconnect()
+        return Conversation(sid, file_store=self.file_store, config=self.config)
 
     async def send(self, sid: str, data: dict[str, object]) -> bool:
         """Sends data to the client."""

@@ -12,11 +12,7 @@ from openhands.events.action.commands import (
     IPythonRunCellAction,
 )
 from openhands.events.action.empty import NullAction
-from openhands.events.action.files import (
-    FileEditAction,
-    FileReadAction,
-    FileWriteAction,
-)
+from openhands.events.action.files import FileReadAction, FileWriteAction
 from openhands.events.action.message import MessageAction
 from openhands.events.action.tasks import AddTaskAction, ModifyTaskAction
 
@@ -28,7 +24,6 @@ actions = (
     BrowseInteractiveAction,
     FileReadAction,
     FileWriteAction,
-    FileEditAction,
     AgentFinishAction,
     AgentRejectAction,
     AgentDelegateAction,

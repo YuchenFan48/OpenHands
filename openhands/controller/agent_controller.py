@@ -3,8 +3,6 @@ import copy
 import traceback
 from typing import Type
 
-import litellm
-
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
@@ -132,6 +130,10 @@ class AgentController:
     async def update_state_after_step(self):
         # update metrics especially for cost. Use deepcopy to avoid it being modified by agent.reset()
         self.state.local_metrics = copy.deepcopy(self.agent.llm.metrics)
+        if 'llm_completions' not in self.state.extra_data:
+            self.state.extra_data['llm_completions'] = []
+        self.state.extra_data['llm_completions'].extend(self.agent.llm.llm_completions)
+        self.agent.llm.llm_completions.clear()
 
     async def report_error(self, message: str, exception: Exception | None = None):
         """Reports an error to the user and sends the exception to the LLM next step, in the hope it can self-correct.
@@ -143,12 +145,7 @@ class AgentController:
         self.state.last_error = message
         if exception:
             self.state.last_error += f': {exception}'
-        detail = str(exception) if exception is not None else ''
-        if exception is not None and isinstance(exception, litellm.AuthenticationError):
-            detail = 'Please check your credentials. Is your API key correct?'
-        self.event_stream.add_event(
-            ErrorObservation(f'{message}:{detail}'), EventSource.USER
-        )
+        self.event_stream.add_event(ErrorObservation(message), EventSource.USER)
 
     async def start_step_loop(self):
         """The main loop for the agent's step-by-step execution."""
@@ -220,8 +217,8 @@ class AgentController:
         """
         if (
             self._pending_action
-            and hasattr(self._pending_action, 'confirmation_state')
-            and self._pending_action.confirmation_state
+            and hasattr(self._pending_action, 'is_confirmed')
+            and self._pending_action.is_confirmed
             == ActionConfirmationStatus.AWAITING_CONFIRMATION
         ):
             return
@@ -254,11 +251,11 @@ class AgentController:
             if self.state.agent_state == AgentState.ERROR:
                 self.state.metrics.merge(self.state.local_metrics)
         elif isinstance(observation, FatalErrorObservation):
-            self.state.last_error = (
-                f'There was a fatal error during agent execution: {str(observation)}'
+            await self.report_error(
+                'There was a fatal error during agent execution: ' + str(observation)
             )
-            self.state.metrics.merge(self.state.local_metrics)
             await self.set_agent_state_to(AgentState.ERROR)
+            self.state.metrics.merge(self.state.local_metrics)
 
     async def _handle_message_action(self, action: MessageAction):
         """Handles message actions from the event stream.
@@ -326,10 +323,9 @@ class AgentController:
             if hasattr(self._pending_action, 'thought'):
                 self._pending_action.thought = ''  # type: ignore[union-attr]
             if new_state == AgentState.USER_CONFIRMED:
-                confirmation_state = ActionConfirmationStatus.CONFIRMED
+                self._pending_action.is_confirmed = ActionConfirmationStatus.CONFIRMED  # type: ignore[attr-defined]
             else:
-                confirmation_state = ActionConfirmationStatus.REJECTED
-            self._pending_action.confirmation_state = confirmation_state  # type: ignore[attr-defined]
+                self._pending_action.is_confirmed = ActionConfirmationStatus.REJECTED  # type: ignore[attr-defined]
             self.event_stream.add_event(self._pending_action, EventSource.AGENT)
 
         self.state.agent_state = new_state
@@ -406,14 +402,6 @@ class AgentController:
             await asyncio.sleep(1)
             return
 
-        # check if agent got stuck before taking any action
-        if self._is_stuck():
-            # This need to go BEFORE report_error to sync metrics
-            self.event_stream.add_event(
-                FatalErrorObservation('Agent got stuck in a loop'), EventSource.USER
-            )
-            return
-
         if self.delegate is not None:
             assert self.delegate != self
             if self.delegate.get_agent_state() == AgentState.PAUSED:
@@ -458,15 +446,13 @@ class AgentController:
             if self.state.confirmation_mode and (
                 type(action) is CmdRunAction or type(action) is IPythonRunCellAction
             ):
-                action.confirmation_state = (
-                    ActionConfirmationStatus.AWAITING_CONFIRMATION
-                )
+                action.is_confirmed = ActionConfirmationStatus.AWAITING_CONFIRMATION
             self._pending_action = action
 
         if not isinstance(action, NullAction):
             if (
-                hasattr(action, 'confirmation_state')
-                and action.confirmation_state
+                hasattr(action, 'is_confirmed')
+                and action.is_confirmed
                 == ActionConfirmationStatus.AWAITING_CONFIRMATION
             ):
                 await self.set_agent_state_to(AgentState.AWAITING_USER_CONFIRMATION)
@@ -474,6 +460,11 @@ class AgentController:
 
         await self.update_state_after_step()
         logger.info(action, extra={'msg_type': 'ACTION'})
+
+        if self._is_stuck():
+            # This need to go BEFORE report_error to sync metrics
+            await self.set_agent_state_to(AgentState.ERROR)
+            await self.report_error('Agent got stuck in a loop')
 
     async def _delegate_step(self):
         """Executes a single step of the delegate agent."""

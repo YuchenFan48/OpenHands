@@ -1,6 +1,5 @@
 import React from "react";
 import { useSelector } from "react-redux";
-import toast from "react-hot-toast";
 import { RootState } from "#/store";
 import FolderIcon from "../FolderIcon";
 import FileIcon from "../FileIcons";
@@ -19,7 +18,7 @@ function Title({ name, type, isOpen, onClick }: TitleProps) {
   return (
     <div
       onClick={onClick}
-      className="cursor-pointer text-nowrap rounded-[5px] p-1 nowrap flex items-center gap-2 aria-selected:bg-neutral-600 aria-selected:text-white hover:text-white"
+      className="cursor-pointer rounded-[5px] p-1 nowrap flex items-center gap-2 aria-selected:bg-neutral-600 aria-selected:text-white hover:text-white"
     >
       <div className="flex-shrink-0">
         {type === "folder" && <FolderIcon isOpen={isOpen} />}
@@ -61,12 +60,8 @@ function TreeNode({ path, defaultOpen = false }: TreeNodeProps) {
 
     const token = localStorage.getItem("token");
     if (token) {
-      try {
-        const newChildren = await OpenHands.getFiles(token, path);
-        setChildren(newChildren);
-      } catch (error) {
-        toast.error("Failed to fetch files");
-      }
+      const newChildren = await OpenHands.getFiles(token, path);
+      setChildren(newChildren);
     }
   };
 
@@ -82,16 +77,12 @@ function TreeNode({ path, defaultOpen = false }: TreeNodeProps) {
     if (isDirectory) {
       setIsOpen((prev) => !prev);
     } else if (token) {
+      setSelectedPath(path);
       const code = modifiedFiles[path] || files[path];
+      const fetchedCode = await OpenHands.getFile(token, path);
 
-      try {
-        const fetchedCode = await OpenHands.getFile(token, path);
-        setSelectedPath(path);
-        if (!code || fetchedCode !== files[path]) {
-          setFileContent(path, fetchedCode);
-        }
-      } catch (error) {
-        toast.error("Failed to fetch file");
+      if (!code || fetchedCode !== files[path]) {
+        setFileContent(path, fetchedCode);
       }
     }
   };

@@ -53,7 +53,7 @@ export interface BrowseObservation extends OpenHandsObservationEvent<"browse"> {
 }
 
 export interface ErrorObservation extends OpenHandsObservationEvent<"error"> {
-  source: "user";
+  source: "agent";
 }
 
 export type OpenHandsObservation =

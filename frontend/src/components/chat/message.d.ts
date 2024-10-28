@@ -4,8 +4,3 @@ type Message = {
   imageUrls: string[];
   timestamp: string;
 };
-
-type ErrorMessage = {
-  error: string;
-  message: string;
-};

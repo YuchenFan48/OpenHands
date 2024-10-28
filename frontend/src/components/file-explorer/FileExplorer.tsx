@@ -90,17 +90,12 @@ function ExplorerActions({
   );
 }
 
-interface FileExplorerProps {
-  error: string | null;
-}
-
-function FileExplorer({ error }: FileExplorerProps) {
+function FileExplorer() {
   const { revalidate } = useRevalidator();
 
   const { paths, setPaths } = useFiles();
   const [isHidden, setIsHidden] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
-
   const { curAgentState } = useSelector((state: RootState) => state.agent);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const dispatch = useDispatch();
@@ -163,7 +158,7 @@ function FileExplorer({ error }: FileExplorerProps) {
 
         refreshWorkspace();
       }
-    } catch (e) {
+    } catch (error) {
       // Handle unexpected errors (network issues, etc.)
       toast.error(
         `upload-error-${new Date().getTime()}`,
@@ -235,18 +230,11 @@ function FileExplorer({ error }: FileExplorerProps) {
               />
             </div>
           </div>
-          {!error && (
-            <div className="overflow-auto flex-grow">
-              <div style={{ display: isHidden ? "none" : "block" }}>
-                <ExplorerTree files={paths} />
-              </div>
+          <div className="overflow-auto flex-grow">
+            <div style={{ display: isHidden ? "none" : "block" }}>
+              <ExplorerTree files={paths} />
             </div>
-          )}
-          {error && (
-            <div className="flex flex-col items-center justify-center h-full">
-              <p className="text-neutral-300 text-sm">{error}</p>
-            </div>
-          )}
+          </div>
         </div>
         <input
           data-testid="file-input"

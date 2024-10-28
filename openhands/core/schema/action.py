@@ -24,10 +24,6 @@ class ActionTypeSchema(BaseModel):
     """Writes the content to a file.
     """
 
-    EDIT: str = Field(default='edit')
-    """Edits a file by providing a draft.
-    """
-
     RUN: str = Field(default='run')
     """Runs a command.
     """

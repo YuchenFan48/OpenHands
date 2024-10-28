@@ -35,8 +35,3 @@ export interface Feedback {
   permissions: "public" | "private";
   trajectory: unknown[];
 }
-
-export interface GetConfigResponse {
-  APP_MODE: "saas" | "oss";
-  GITHUB_CLIENT_ID: string | null;
-}

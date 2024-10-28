@@ -11,9 +11,10 @@ from openhands.events.action.agent import ChangeAgentStateAction
 from openhands.events.event import EventSource
 from openhands.events.stream import EventStream
 from openhands.runtime import get_runtime_cls
-from openhands.runtime.base import Runtime
+from openhands.runtime.runtime import Runtime
 from openhands.security import SecurityAnalyzer, options
 from openhands.storage.files import FileStore
+from openhands.utils.async_utils import call_sync_from_async
 
 
 class AgentSession:
@@ -87,7 +88,6 @@ class AgentSession:
         try:
             asyncio.run(self._start(*args), debug=True)
         except RuntimeError:
-            logger.error(f'Error starting session: {RuntimeError}', exc_info=True)
             logger.info('Session Finished')
 
     async def _start(
@@ -103,7 +103,8 @@ class AgentSession:
     ):
         self.loop = asyncio.get_running_loop()
         self._create_security_analyzer(config.security.security_analyzer)
-        await self._create_runtime(
+        await call_sync_from_async(
+            self._create_runtime,
             runtime_name=runtime_name,
             config=config,
             agent=agent,
@@ -156,7 +157,7 @@ class AgentSession:
                 security_analyzer, SecurityAnalyzer
             )(self.event_stream)
 
-    async def _create_runtime(
+    def _create_runtime(
         self,
         runtime_name: str,
         config: AppConfig,
@@ -176,16 +177,15 @@ class AgentSession:
 
         logger.info(f'Initializing runtime `{runtime_name}` now...')
         runtime_cls = get_runtime_cls(runtime_name)
-        self.runtime = runtime_cls(
-            config=config,
-            event_stream=self.event_stream,
-            sid=self.sid,
-            plugins=agent.sandbox_plugins,
-            status_message_callback=status_message_callback,
-        )
 
         try:
-            await self.runtime.connect()
+            self.runtime = runtime_cls(
+                config=config,
+                event_stream=self.event_stream,
+                sid=self.sid,
+                plugins=agent.sandbox_plugins,
+                status_message_callback=status_message_callback,
+            )
         except Exception as e:
             logger.error(f'Runtime initialization failed: {e}', exc_info=True)
             raise
@@ -224,23 +224,13 @@ class AgentSession:
                 'Runtime must be initialized before the agent controller'
             )
 
-        msg = (
+        logger.info(
             '\n--------------------------------- OpenHands Configuration ---------------------------------\n'
             f'LLM: {agent.llm.config.model}\n'
             f'Base URL: {agent.llm.config.base_url}\n'
-        )
-        if agent.llm.config.draft_editor:
-            msg += (
-                f'Draft editor LLM (for file editing): {agent.llm.config.draft_editor.model}\n'
-                f'Draft editor LLM (for file editing) Base URL: {agent.llm.config.draft_editor.base_url}\n'
-            )
-        msg += (
             f'Agent: {agent.name}\n'
-            f'Runtime: {self.runtime.__class__.__name__}\n'
-            f'Plugins: {agent.sandbox_plugins}\n'
             '-------------------------------------------------------------------------------------------'
         )
-        logger.info(msg)
 
         self.controller = AgentController(
             sid=self.sid,

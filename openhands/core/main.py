@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 import sys
+
+sys.path.append('/Users/apple/Desktop/AI_Build_AI/OpenHands')
 import uuid
 from typing import Callable, Protocol, Type
 
@@ -26,7 +28,7 @@ from openhands.events.observation import AgentStateChangedObservation
 from openhands.events.serialization.event import event_to_trajectory
 from openhands.llm.llm import LLM
 from openhands.runtime import get_runtime_cls
-from openhands.runtime.base import Runtime
+from openhands.runtime.runtime import Runtime
 from openhands.storage import get_file_store
 
 
@@ -122,7 +124,6 @@ async def run_controller(
 
     if runtime is None:
         runtime = create_runtime(config, sid=sid)
-        await runtime.connect()
 
     event_stream = runtime.event_stream
     # restore cli session if enabled
@@ -181,7 +182,7 @@ async def run_controller(
                 if exit_on_message:
                     message = '/exit'
                 elif fake_user_response_fn is None:
-                    message = input('Request user input >> ')
+                    message = 'Sure, continue!'
                 else:
                     message = fake_user_response_fn(controller.get_state())
                 action = MessageAction(content=message)

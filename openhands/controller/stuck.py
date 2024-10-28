@@ -33,7 +33,8 @@ class StuckDetector:
                 (isinstance(event, MessageAction) and event.source == EventSource.USER)
                 or
                 # there might be some NullAction or NullObservation in the history at least for now
-                isinstance(event, (NullAction, NullObservation))
+                isinstance(event, NullAction)
+                or isinstance(event, NullObservation)
             )
         ]
 

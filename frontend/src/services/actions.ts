@@ -1,5 +1,6 @@
 import { addAssistantMessage, addUserMessage } from "#/state/chatSlice";
 import { setCode, setActiveFilepath } from "#/state/codeSlice";
+import { appendInput } from "#/state/commandSlice";
 import { appendJupyterInput } from "#/state/jupyterSlice";
 import {
   ActionSecurityRisk,
@@ -55,12 +56,21 @@ const messageActions = {
     if (message.args.thought) {
       store.dispatch(addAssistantMessage(message.args.thought));
     }
+    if (
+      !message.args.is_confirmed ||
+      message.args.is_confirmed !== "rejected"
+    ) {
+      store.dispatch(appendInput(message.args.command));
+    }
   },
   [ActionType.RUN_IPYTHON]: (message: ActionMessage) => {
     if (message.args.thought) {
       store.dispatch(addAssistantMessage(message.args.thought));
     }
-    if (message.args.confirmation_state !== "rejected") {
+    if (
+      !message.args.is_confirmed ||
+      message.args.is_confirmed !== "rejected"
+    ) {
       store.dispatch(appendJupyterInput(message.args.code));
     }
   },
@@ -88,7 +98,7 @@ export function handleActionMessage(message: ActionMessage) {
   if (
     (message.action === ActionType.RUN ||
       message.action === ActionType.RUN_IPYTHON) &&
-    message.args.confirmation_state === "awaiting_confirmation"
+    message.args.is_confirmed === "awaiting_confirmation"
   ) {
     if (message.args.thought) {
       store.dispatch(addAssistantMessage(message.args.thought));

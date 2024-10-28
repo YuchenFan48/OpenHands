@@ -34,7 +34,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from starlette.middleware.base import BaseHTTPMiddleware
 
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
 from openhands.controller.agent import Agent
@@ -55,7 +54,7 @@ from openhands.events.observation import (
 )
 from openhands.events.serialization import event_to_dict
 from openhands.llm import bedrock
-from openhands.runtime.base import Runtime
+from openhands.runtime.runtime import Runtime
 from openhands.server.auth import get_sid_from_token, sign_token
 from openhands.server.session import SessionManager
 
@@ -64,9 +63,6 @@ load_dotenv()
 config = load_app_config()
 file_store = get_file_store(config.file_store, config.file_store_path)
 session_manager = SessionManager(config, file_store)
-
-GITHUB_CLIENT_ID = os.getenv('GITHUB_CLIENT_ID', '').strip()
-GITHUB_CLIENT_SECRET = os.getenv('GITHUB_CLIENT_SECRET', '').strip()
 
 
 @asynccontextmanager
@@ -84,25 +80,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
-
-class NoCacheMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware to disable caching for all routes by adding appropriate headers
-    """
-
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        if not request.url.path.startswith('/assets'):
-            response.headers['Cache-Control'] = (
-                'no-cache, no-store, must-revalidate, max-age=0'
-            )
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
-        return response
-
-
-app.add_middleware(NoCacheMiddleware)
 
 security_scheme = HTTPBearer()
 
@@ -203,14 +180,9 @@ async def attach_session(request: Request, call_next):
     Returns:
         Response: The response from the next middleware or route handler.
     """
-    non_authed_paths = [
-        '/api/options/',
-        '/api/github/callback',
-        '/api/authenticate',
-    ]
-    if any(
-        request.url.path.startswith(path) for path in non_authed_paths
-    ) or not request.url.path.startswith('/api/'):
+    if request.url.path.startswith('/api/options/') or not request.url.path.startswith(
+        '/api/'
+    ):
         response = await call_next(request)
         return response
 
@@ -239,18 +211,16 @@ async def attach_session(request: Request, call_next):
             content={'error': 'Invalid token'},
         )
 
-    request.state.conversation = await session_manager.attach_to_conversation(
-        request.state.sid
+    request.state.conversation = await call_sync_from_async(
+        session_manager.attach_to_conversation, request.state.sid
     )
     if request.state.conversation is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={'error': 'Session not found'},
         )
-    try:
-        response = await call_next(request)
-    finally:
-        await session_manager.detach_from_conversation(request.state.conversation)
+
+    response = await call_next(request)
     return response
 
 
@@ -284,7 +254,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ```
     - Run a command:
         ```json
-        {"action": "run", "args": {"command": "ls -l", "thought": "", "confirmation_state": "confirmed"}}
+        {"action": "run", "args": {"command": "ls -l", "thought": "", "is_confirmed": "confirmed"}}
         ```
     - Run an IPython command:
         ```json
@@ -792,16 +762,16 @@ class AuthCode(BaseModel):
     code: str
 
 
-@app.post('/api/github/callback')
+@app.post('/github/callback')
 def github_callback(auth_code: AuthCode):
     # Prepare data for the token exchange request
     data = {
-        'client_id': GITHUB_CLIENT_ID,
-        'client_secret': GITHUB_CLIENT_SECRET,
+        'client_id': os.getenv('GITHUB_CLIENT_ID'),
+        'client_secret': os.getenv('GITHUB_CLIENT_SECRET'),
         'code': auth_code.code,
     }
 
-    logger.info('Exchanging code for GitHub token')
+    logger.info(f'Exchanging code for token: {data}')
 
     headers = {'Accept': 'application/json'}
     response = requests.post(
@@ -809,7 +779,6 @@ def github_callback(auth_code: AuthCode):
     )
 
     if response.status_code != 200:
-        logger.error(f'Failed to exchange code for token: {response.text}')
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={'error': 'Failed to exchange code for token'},
@@ -833,7 +802,7 @@ class User(BaseModel):
     login: str  # GitHub login handle
 
 
-@app.post('/api/authenticate')
+@app.post('/authenticate')
 def authenticate(user: User | None = None):
     waitlist = os.getenv('GITHUB_USER_LIST_FILE')
 
@@ -858,13 +827,4 @@ def authenticate(user: User | None = None):
     )
 
 
-class SPAStaticFiles(StaticFiles):
-    async def get_response(self, path: str, scope):
-        try:
-            return await super().get_response(path, scope)
-        except Exception:
-            # FIXME: just making this HTTPException doesn't work for some reason
-            return await super().get_response('index.html', scope)
-
-
-app.mount('/', SPAStaticFiles(directory='./frontend/build', html=True), name='dist')
+app.mount('/', StaticFiles(directory='./frontend/build', html=True), name='dist')

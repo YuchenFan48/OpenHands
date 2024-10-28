@@ -14,7 +14,6 @@ from tenacity import (
 )
 from urllib3.exceptions import IncompleteRead
 
-from openhands.core.logger import openhands_logger as logger
 from openhands.utils.tenacity_stop import stop_if_should_exit
 
 
@@ -29,13 +28,6 @@ def is_404_error(exception):
     return (
         isinstance(exception, requests.HTTPError)
         and exception.response.status_code == 404
-    )
-
-
-def is_429_error(exception):
-    return (
-        isinstance(exception, requests.HTTPError)
-        and exception.response.status_code == 429
     )
 
 
@@ -84,9 +76,6 @@ def send_request_with_retry(
         wait=wait_exponential(multiplier=1, min=4, max=20),
         retry=retry_condition,
         reraise=True,
-        before_sleep=lambda retry_state: logger.debug(
-            f'Retrying {method} request to {url} due to {retry_state.outcome.exception()}. Attempt {retry_state.attempt_number}'
-        ),
     )
     def _send_request_with_retry():
         response = session.request(method, url, **kwargs)
